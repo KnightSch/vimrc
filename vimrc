@@ -23,13 +23,19 @@ set history=50		" keep 50 lines of command line history
 set ruler		" show the cursor position all the time
 set autoread		" auto read when file is changed from outside
 set nu			" show line numbers
+"
+" Stop moving the cursor to the beginning of the line (in many move commands)
+"
+se nostartofline
 
 
 filetype off          " necessary to make ftdetect work on Linux
 syntax on
-filetype on           " Enable filetype detection
-filetype indent on    " Enable filetype-specific indenting
-filetype plugin on    " Enable filetype-specific plugins
+if has("autocmd")
+    filetype on           " Enable filetype detection
+    filetype indent on    " Enable filetype-specific indenting
+    filetype plugin on    " Enable filetype-specific plugins
+endif
 
 
 " auto reload vimrc when editing it
@@ -41,12 +47,14 @@ set hlsearch		" search highlighting
 
 if has("gui_running")	" GUI color and font settings
   "set guifont=Osaka-Mono:h20
-  set guifont=Source\ Code\ Pro:h11	"my favorite font of windows 7
-  set background=dark 
-  set t_Co=256          " 256 color mode
-  set cursorline        " highlight current line
-  colors moria
-  highlight CursorLine          guibg=#003853 ctermbg=24  gui=none cterm=none
+  " Horizontal scrollbar
+    set guioptions+=b
+    set guifont=Source\ Code\ Pro\ 11	"my favorite font of windows 7
+    set background=dark 
+    set t_Co=256          " 256 color mode
+    set cursorline        " highlight current line
+    colors moria
+    highlight CursorLine          guibg=#003853 ctermbg=24  gui=none cterm=none
 else
 " terminal color settings
   colors vgod
@@ -55,11 +63,20 @@ endif
 set clipboard=unnamed	" yank to the system register (*) by default
 set showmatch		" Cursor shows matching ) and }
 set showmode		" Show current mode
-set wildchar=<TAB>	" start wild expansion in the command line using <TAB>
-set wildmenu            " wild char completion menu
 
-" ignore these files while expanding wild chars
-set wildignore=*.o,*.class,*.pyc
+"
+" Better TAB completion for files (like the shell)
+"
+if has("wildmenu")
+    set wildchar=<TAB>	                            " start wild expansion in the command line using <TAB>
+    set wildmenu                                    " wild char completion menu
+    set wildmode=longest,list
+    " Ignore stuff (for TAB autocompletion)
+    set wildignore+=*.a,*.o,*.class,*.pyc 
+    set wildignore+=*.bmp,*.gif,*.ico,*.jpg,*.png
+    set wildignore+=.DS_Store,.git,.hg,.svn
+    set wildignore+=*~,*.swp,*.tmp
+endif
 
 set autoindent		" auto indentation
 set incsearch		" incremental search
@@ -68,12 +85,37 @@ set copyindent		" copy the previous indentation on autoindenting
 set ignorecase		" ignore case when searching
 set smartcase		" ignore case if search pattern is all lowercase,case-sensitive otherwise
 set smarttab		" insert tabs on the start of a line according to context
+se modelines=2
+se modeline
+se nocp
+"se mouse=a
 
 " disable sound on errors
 set noerrorbells
 set novisualbell
 set t_vb=
 set tm=500
+
+"
+" Very efficient moves amongst local lines, shows relative jump distances
+"
+se relativenumber
+
+"
+" Fix insert-mode cursor keys in FreeBSD
+"
+if has("unix")
+  let myosuname = system("uname")
+  if myosuname =~ "FreeBSD"
+    set term=cons25
+  endif
+endif
+
+"
+" Reselect visual block after indenting
+"
+vnoremap < <gv
+vnoremap > >gv
 
 " TAB setting{
    set expandtab        "replace <TAB> with spaces
@@ -84,11 +126,89 @@ set tm=500
 "}      							
 
 " status line {
+"set laststatus=2
+"set statusline=\ %{HasPaste()}%<%-15.25(%f%)%m%r%h\ %w\ \ 
+"set statusline+=\ \ \ [%{&ff}/%Y] 
+"set statusline+=\ \ \ %<%20.30(%{hostname()}:%{CurDir()}%)\ 
+"set statusline+=%=%-10.(%l,%c%V%)\ %p%%/%L
+
+"
+" always show the status line
+"
 set laststatus=2
-set statusline=\ %{HasPaste()}%<%-15.25(%f%)%m%r%h\ %w\ \ 
-set statusline+=\ \ \ [%{&ff}/%Y] 
-set statusline+=\ \ \ %<%20.30(%{hostname()}:%{CurDir()}%)\ 
-set statusline+=%=%-10.(%l,%c%V%)\ %p%%/%L
+set statusline=%F%m%r%h%w[%L][%{&ff}]%y[%p%%][%04l,%04v]
+"              | | | | |  |   |      |  |     |    |
+"              | | | | |  |   |      |  |     |    + current
+"              | | | | |  |   |      |  |     |       column
+"              | | | | |  |   |      |  |     +-- current line
+"              | | | | |  |   |      |  +-- current % into file
+"              | | | | |  |   |      +-- current syntax in
+"              | | | | |  |   |          square brackets
+"              | | | | |  |   +-- current fileformat
+"              | | | | |  +-- number of lines
+"              | | | | +-- preview flag in square brackets
+"              | | | +-- help flag in square brackets
+"              | | +-- readonly flag in square brackets
+"              | +-- rodified flag in square brackets
+"              +-- full path to file in the buffer
+
+"
+" We must be able to show the 80 column limit with F9...
+" While we're at it, we'll also show TABs and trailing WS.
+" Hitting F9 again will toggle back to normal.
+"
+function! TabsAndColumn80AndNumbers ()
+    set listchars=tab:>-,trail:-
+    set list!
+    if exists('+colorcolumn')
+        " Show column 80
+        if &colorcolumn == ""
+            set colorcolumn=80
+        else
+            set colorcolumn=
+        endif
+    endif
+endfunction
+
+"
+" Smart backspace
+"
+set backspace=start,indent,eol
+
+" (s/vimdiff/meld/ or whatever else you fancy...)
+"
+" Inside vimdiff, enable wrap (visible diffs past 80 columns)
+" au FilterWritePre * if &diff | set wrap | endif
+
+" Set vimdiff to ignore whitespace
+set diffopt+=iwhite
+set diffexpr=
+
+"
+" Much improved auto completion menus
+"
+set completeopt=menuone,longest,preview
+
+"
+" Use C-space for omni completion in insert mode.
+"
+inoremap <expr> <C-Space> pumvisible() \|\| &omnifunc == '' ?
+            \ "\<lt>C-n>" :
+            \ "\<lt>C-x>\<lt>C-o><c-r>=pumvisible() ?" .
+            \ "\"\\<lt>c-n>\\<lt>c-p>\\<lt>c-n>\" :" .
+            \ "\" \\<lt>bs>\\<lt>C-n>\"\<CR>"
+imap <C-@> <C-Space>
+
+"
+" Show keystrokes as I type (command mode)
+"
+set showcmd
+
+"
+" Default to very magic (I prefer normal Perl-y regexps)
+"
+nnoremap / /\v
+vnoremap / /\v
 
 function! CurDir()
     let curdir = substitute(getcwd(), $HOME, "~", "")
@@ -182,6 +302,40 @@ vnoremap > >gv
 
 " :cd. change working directory to that of the current file
 cmap cd. lcd %:p:h
+
+"
+" Tags
+"
+" If I ever need to generate tags on the fly, I uncomment this:
+" noremap <C-F11> :!ctags -R --c++-kinds=+p --fields=+iaS --extra=+q .<CR>
+set tags+=/usr/include/tags
+
+" (for CUDA .cu, too)
+au BufNewFile,BufRead *.c,*.cc,*.cpp,*.h,*.cu call SetupCandCPPenviron()
+function! SetupCandCPPenviron()
+    "
+    " Search path for 'gf' command (e.g. open #include-d files)
+    "
+    "set path+=/usr/include/c++/**
+
+    "
+    " Tags
+    "
+    " If I ever need to generate tags on the fly, I uncomment this:
+    " noremap <C-F11> :!ctags -R --c++-kinds=+p --fields=+iaS --extra=+q .<CR>
+    set tags+=/usr/include/tags
+
+    "
+    " Especially for C and C++, use section 3 of the manpages
+    "
+    noremap <buffer> <silent> K :exe "Man" 3 expand('<cword>') <CR>
+
+    "
+    " Remap F5 to make
+    "
+    noremap <buffer> <special> <F5> :make<CR>
+    noremap! <buffer> <special> <F5> <ESC>:make<CR>
+endfunction
 
 " Writing Restructured Text (Sphinx Documentation) {
    " Ctrl-u 1:    underline Parts w/ #'s
@@ -322,6 +476,20 @@ let g:SuperTabContextDiscoverDiscovery = ["&completefunc:<c-x><c-u>", "&omnifunc
 hi link EasyMotionTarget ErrorMsg
 hi link EasyMotionShade  Comment
 
+""""""""""""""""""""
+" NERDTree section "
+""""""""""""""""""""
+
+" maps NERDTree to F10
+" (normal, visual and operator-pending modes)
+noremap <silent> <F10> :NERDTreeToggle<CR>
+" (also in insert and command-line modes)
+noremap! <silent> <F10> <ESC>:NERDTreeToggle<CR>
+
+" tell NERDTree to use ASCII chars
+" and to ignore some files
+let g:NERDTreeDirArrows=0
+let g:NERDTreeIgnore=['\.pyc$', '\.o$']
 
 " --- TagBar
 " toggle TagBar with F7
@@ -332,6 +500,7 @@ let g:tagbar_autofocus = 1
 " --- PowerLine
 " let g:Powerline_symbols = 'fancy' " require fontpatcher
 "
+let g:Powerline_stl_path_style = 'short'
 
 " --- SnipMate
 let g:snipMateAllowMatchingDot = 0
